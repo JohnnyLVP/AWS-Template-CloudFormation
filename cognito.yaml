@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cognito Stack
+Parameters:
+  Org:
+    Type: String
+    Description: Organization where is deployed the service
+    Default: johnny
+    AllowedValues: 
+      - belc
+      - johnny
+  Project:
+    Type: String
+    Description: Name of the project that will use the aws service
+  Env:
+    Type: String
+    Description: Environment where this service will be useed.
+    AllowedValues:
+      - qas
+      - prd
+
+Resources:
+  # Creates a federeated Identity pool
+  IdentityPool:
+    Type: "AWS::Cognito::IdentityPool"
+    Properties:
+      IdentityPoolName: !Sub ${Org}${Project}IdentityPool${Env}
+      AllowUnauthenticatedIdentities: true
+    # Create a role for unauthorized acces to AWS resources. Very limited access. Only allows users in the previously created Identity Pool
+  CognitoUnAuthorizedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals: 
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: "CognitoUnauthorizedPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+
+  CognitoAuthorizedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals: 
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: "CognitoAuthorizedPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+
+  IdentityPoolRoleAttachment:
+    Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+    DependsOn:
+        - IdentityPool
+        - CognitoAuthorizedRole
+        - CognitoUnAuthorizedRole
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthorizedRole.Arn
+        unauthenticated: !GetAtt CognitoUnAuthorizedRole.Arn
+
+  
+  # Assigns the roles to the Identity Pool
+Outputs:
+  IdentityPoolId:
+    Value: !Ref IdentityPool
+    Export:
+      Name: "IdentityPool::Id"
