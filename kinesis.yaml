@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Kinesis Stack
+Parameters:
+  Org:
+    Type: String
+    Description: Organization where is deployed the service
+    Default: johnny
+    AllowedValues: 
+      - belc
+      - johnny
+  Project:
+    Type: String
+    Description: Name of the project that will use the aws service
+  Env:
+    Type: String
+    Description: Environment where this service will be useed.
+    AllowedValues:
+      - dev
+      - qas
+      - prd
+  
+Resources:
+  # Creates a federeated Identity pool
+  KinesisStream:
+    Type: "AWS::Kinesis::Stream"
+    Properties: 
+      Name: !Sub ${Org}${Project}Stream${Env}
+      ShardCount: 2
+      Tags: 
+        - Key: Organization
+          Value: !Sub ${Org}
+        - Key: Environment
+          Value: !Sub ${Env}
+
+Outputs: 
+  KinesisOutput:
+    Value: !Ref KinesisStream
+    Export:
+      Name: "KinesisStream::Id"
